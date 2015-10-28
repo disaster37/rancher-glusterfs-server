@@ -1,11 +1,10 @@
-#!/usr/bin/python
-import os
+mport os
 import subprocess
 from threading import Thread
+import urllib2
 from gluster.Gluster import Gluster
 import sys
 import time
-import socket
 
 __author__ = 'Sebastien LANGOUREAUX'
 
@@ -57,6 +56,7 @@ class ThreadGluster(Thread):
         ]
     try:
         response = subprocess.check_output(program).split("\n")
+        response.pop()
         if len(response) == 0:
             print("No dns answer for service name '" + self.__service_name + "'. Are you sure is the name of your service ? Else set the '-e SERVICE_NAME' with the good value")
             sys.exit(1)
@@ -64,25 +64,26 @@ class ThreadGluster(Thread):
             print("I am alone. So I can't create the glusterfs cluster")
             sys.exit(1)
         else:
-            print("There are " + len(response) + " servers. Now I will look if I am the master")
+            print("There are " + str(len(response)) + " servers. Now I will look if I am the master")
     except subprocess.CalledProcessError,e:
         print("Some errors appear when I dig the service name : " + e.output)
         sys.exit(1)
 
     # Now I get my IP to look if I am the master
-    my_ip = [ip for ip in socket.gethostbyname_ex(socket.gethostname())[2] if not ip.startswith("127.")][:1]
+    my_ip = urllib2.urlopen('http://169.254.169.250/latest/self/container/primary_ip').read()
     if my_ip is None:
         print("I can't found my IP")
         sys.exit(1)
-
     print("My IP is " + my_ip + ". I will get my score and compare to another node")
     my_score = int(my_ip.replace('.',''))
+    print("My score is " + str(my_score))
     isMaster = True
 
     # Now I loop on all node to compar my score
     for node_ip in response:
         if node_ip != my_ip:
-            node_score = int(my_ip.replace('.',''))
+            node_score = int(node_ip.replace('.',''))
+            print("Node score is " + str(node_score))
             if node_score < my_score:
                 isMaster = False
                 break
@@ -159,3 +160,6 @@ if __name__ == '__main__':
 
         # Start services
         os.system("/usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf")
+
+
+

@@ -30,8 +30,11 @@ ADD assets/setup/supervisor-glusterfs.conf /etc/supervisor/conf.d/glusterfs.conf
 ADD assets/init.py /app/
 
 
+WORKDIR /app
 VOLUME ["${GLUSTER_DATA}", "/var/lib/glusterd" ]
 
 
 # CLEAN APT
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+CMD [ "/app/init.py", "start" ] 
