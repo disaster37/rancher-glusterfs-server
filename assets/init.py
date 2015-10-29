@@ -143,8 +143,9 @@ class ThreadGluster(Thread):
             for volume in self.__list_volumes:
                 for node_ip in list_node:
                     list_bricks.append(node_ip + ':' + self.__gluster_directory + '/' + volume)
-                    volume_manager.create(volume, list_bricks, self.__transport, self.__stripe, self.__replica, self.__quota)
-                    print("Volume '" + volume + "' has been created")
+
+                volume_manager.create(volume, list_bricks, self.__transport, self.__stripe, self.__replica, self.__quota)
+                print("Volume '" + volume + "' has been created")
 
             return True
 
@@ -171,6 +172,7 @@ class ThreadGluster(Thread):
         for volume in self.__list_volumes:
                 for node_ip in list_node:
                     list_bricks.append(node_ip + ':' + self.__gluster_directory + '/' + volume)
+
                 volume_manager.extend(volume, list_bricks, self.__replica)
                 print("Volume '" + volume + "' has been extented")
 
