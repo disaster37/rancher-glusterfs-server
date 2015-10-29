@@ -1,4 +1,5 @@
-mport os
+#!/usr/bin/python
+import os
 import subprocess
 from threading import Thread
 import urllib2
@@ -31,6 +32,7 @@ class ThreadGluster(Thread):
     self.__stripe = stripe
     self.__replica = replica
     self.__quota = quota
+    self.__is_on_cluster = False
 
   def run(self):
 
@@ -38,7 +40,11 @@ class ThreadGluster(Thread):
     time.sleep(60)
 
     while True:
-        self.manage_cluster()
+        try:
+            self.manage_cluster()
+        except Exception,e:
+            print("Some error appear : " + e.message)
+
         time.sleep(300)
 
 
@@ -64,7 +70,7 @@ class ThreadGluster(Thread):
             print("I am alone. So I can't create the glusterfs cluster")
             sys.exit(1)
         else:
-            print("There are " + str(len(response)) + " servers. Now I will look if I am the master")
+            print("There are " + str(len(response)) + " servers.")
     except subprocess.CalledProcessError,e:
         print("Some errors appear when I dig the service name : " + e.output)
         sys.exit(1)
@@ -74,74 +80,99 @@ class ThreadGluster(Thread):
     if my_ip is None:
         print("I can't found my IP")
         sys.exit(1)
-    print("My IP is " + my_ip + ". I will get my score and compare to another node")
-    my_score = int(my_ip.replace('.',''))
-    print("My score is " + str(my_score))
-    isMaster = True
+    print("My IP is " + my_ip + ".")
 
-    # Now I loop on all node to compar my score
-    for node_ip in response:
-        if node_ip != my_ip:
-            node_score = int(node_ip.replace('.',''))
-            print("Node score is " + str(node_score))
-            if node_score < my_score:
-                isMaster = False
-                break
-    # I am slave
-    if isMaster == False:
-        peer_status = peer_manager.status()
-        if peer_status["peers"] == 0:
-            print("I am a slave and I am not yet on cluster. I sleep and I wait the master meet me on cluster")
-        else:
-            print("I am a slave and I am already on cluster. I sleep")
-
-        return True
-
-    # I am the master
-    print("I am the master")
+    # Then I look if I am already on cluster
     peer_status = peer_manager.status()
-
-    # Cluster not yet created
     if peer_status["peers"] == 0:
-        list_node = []
-        print("I create the new cluster")
+        print("I am not yet on cluster")
+
+        # Now I look if there are already cluster
+        is_cluster_found = False
         for node_ip in response:
-            peer_manager.probe(node_ip)
-            print(node_ip + " added on cluster")
-            list_node.append(node_ip)
+            if node_ip != my_ip:
+                gluster_temp = Gluster(node_ip)
+                peer_status = gluster_temp.get_peer_manager().status()
+                if peer_status["peers"] > 0:
+                    is_cluster_found = True
+                    break
 
+        if is_cluster_found is True:
+            print("There are  already cluster. I will wait that member meet him")
+            return True
+        
+        # No yet cluster
+        else:
+            print("There are no cluster. I will get if I am the master")
+            
+            my_score = int(my_ip.replace('.',''))
+            print("My score is " + str(my_score))
+            isMaster = True
 
+            # Now I loop on all node to compar my score
+            for node_ip in response:
+                if node_ip != my_ip:
+                    node_score = int(node_ip.replace('.',''))
+                    print("Node score is " + str(node_score))
+                if node_score < my_score:
+                    isMaster = False
+                    break
+            # I am slave
+            if isMaster == False:
+                print("I am a slave and I am not yet on cluster. I sleep and I wait the master meet him on cluster")
+                return True
 
-        # Now I create the volume
-        list_bricks = []
-        print("I create all volume")
-        for volume in self.__list_volumes:
-            for node_ip in list_node:
-                list_bricks.append(node_ip + ':' + self.__gluster_directory + '/' + volume)
-            volume_manager.create(volume, list_bricks, self.__transport, self.__stripe, self.__replica, self.__quota)
-            print("Volume '" + volume + "' has been created")
+            # I am the master
+            print("I am the master")
+            if int(self.__replica) % len(response):
+                print("The number of node is not compatible with your replica number. It must be a multiple of " + str(self.__replica) + ". We do nothink while the number is not compatible.")
+                return False
 
-        return True
+            list_node = []
+            list_node.append(my_ip)
+            print("I create the new cluster")
+            for node_ip in response:
+                if my_ip != node_ip:
+                    peer_manager.probe(node_ip)
+                    print(node_ip + " added on cluster")
+                    list_node.append(node_ip)
+
+            # Now I create the volume
+            list_bricks = []
+            print("I create all volume")
+            for volume in self.__list_volumes:
+                for node_ip in list_node:
+                    list_bricks.append(node_ip + ':' + self.__gluster_directory + '/' + volume)
+                    volume_manager.create(volume, list_bricks, self.__transport, self.__stripe, self.__replica, self.__quota)
+                    print("Volume '" + volume + "' has been created")
+
+            return True
 
     # New node
     elif peer_status["peers"] < len(response):
         print("New container detected")
+        # Check if number is compatible with replica
+        if int(self.__replica) % len(response):
+            print("The number of node is not compatible with your replica number. It must be a multiple of " + str(self.__replica) + ". I do nothink while the number is not compatible")
+            return False
+
         list_node = []
         for node_ip in response:
             if node_ip not in peer_status["host"]:
                 peer_manager.probe(node_ip)
-                print(node_ip + "added on cluster")
+                print(node_ip + " added on cluster")
                 list_node.append(node_ip)
 
         # Now I extend the existing volume
         list_bricks = []
-        print("I extend all volume")
-        for volume in self.__list_volumes:
-            for node_ip in list_node:
-                list_bricks.append(node_ip + ':' + self.__gluster_directory + '/' + volume)
-            volume_manager.extend(volume, list_bricks, self.__replica)
-            print("Volume '" + volume + "' has been extented")
+        print("I extend all volume without change replica")
 
+
+        for volume in self.__list_volumes:
+                for node_ip in list_node:
+                    list_bricks.append(node_ip + ':' + self.__gluster_directory + '/' + volume)
+                volume_manager.extend(volume, list_bricks, self.__replica)
+                print("Volume '" + volume + "' has been extented")
 
         return True
 
@@ -159,6 +190,7 @@ if __name__ == '__main__':
         thread_gluster.start()
 
         # Start services
+        os.system("/usr/sbin/glusterd -p /var/run/glusterd.pid")
         os.system("/usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf")
 
 
