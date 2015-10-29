@@ -100,11 +100,11 @@ class ThreadGluster(Thread):
         if is_cluster_found is True:
             print("There are  already cluster. I will wait that member meet him")
             return True
-        
+
         # No yet cluster
         else:
             print("There are no cluster. I will get if I am the master")
-            
+
             my_score = int(my_ip.replace('.',''))
             print("My score is " + str(my_score))
             isMaster = True
@@ -114,9 +114,9 @@ class ThreadGluster(Thread):
                 if node_ip != my_ip:
                     node_score = int(node_ip.replace('.',''))
                     print("Node score is " + str(node_score))
-                if node_score < my_score:
-                    isMaster = False
-                    break
+                    if node_score < my_score:
+                        isMaster = False
+                        break
             # I am slave
             if isMaster == False:
                 print("I am a slave and I am not yet on cluster. I sleep and I wait the master meet him on cluster")
