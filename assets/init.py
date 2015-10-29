@@ -76,7 +76,7 @@ class ThreadGluster(Thread):
         sys.exit(1)
 
     # Now I get my IP to look if I am the master
-    my_ip = urllib2.urlopen('http://169.254.169.250/latest/self/container/primary_ip').read()
+    my_ip = urllib2.urlopen('http://rancher-metadata/latest/self/container/primary_ip').read()
     if my_ip is None:
         print("I can't found my IP")
         sys.exit(1)
