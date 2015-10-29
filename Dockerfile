@@ -6,9 +6,9 @@ ENV SERVICE_NAME "gluster"
 ENV GLUSTER_DATA "/data"
 ENV GLUSTER_VOLUMES "ranchervol"
 ENV GLUSTER_TRANSPORT "tcp"
-ENV GLUSTER_STRIPE 1
 ENV GLUSTER_REPLICA 2
-
+# Use it ig you should stripe your module
+#ENV GLUSTER_STRIPE 1
 # Use it if you should put some quota on your volume
 #ENV GLUSTER_QUOTA "10GB"
 
@@ -26,8 +26,8 @@ WORKDIR /usr/src/python-gluster
 RUN python setup.py install
 
 # Add some script to init the glusterfs cluster
-ADD assets/setup/supervisor-glusterfs.conf /etc/supervisor/conf.d/glusterfs.conf
 ADD assets/init.py /app/
+RUN chmod +x /app/init.py
 
 
 WORKDIR /app
