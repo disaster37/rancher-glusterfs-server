@@ -124,7 +124,7 @@ class ThreadGluster(Thread):
 
             # I am the master
             print("I am the master")
-            if int(self.__replica) % len(response):
+            if (len(response) % int(self.__replica)) == 0 :
                 print("The number of node is not compatible with your replica number. It must be a multiple of " + str(self.__replica) + ". We do nothink while the number is not compatible.")
                 return False
 
@@ -152,7 +152,7 @@ class ThreadGluster(Thread):
     elif peer_status["peers"] < len(response):
         print("New container detected")
         # Check if number is compatible with replica
-        if int(self.__replica) % len(response):
+        if (len(response) % int(self.__replica)) == 0:
             print("The number of node is not compatible with your replica number. It must be a multiple of " + str(self.__replica) + ". I do nothink while the number is not compatible")
             return False
 
