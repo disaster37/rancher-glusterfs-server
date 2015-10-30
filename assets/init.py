@@ -138,9 +138,10 @@ class ThreadGluster(Thread):
                     list_node.append(node_ip)
 
             # Now I create the volume
-            list_bricks = []
+
             print("I create all volume")
             for volume in self.__list_volumes:
+                list_bricks = []
                 for node_ip in list_node:
                     list_bricks.append(node_ip + ':' + self.__gluster_directory + '/' + volume)
 
@@ -165,16 +166,17 @@ class ThreadGluster(Thread):
                 list_node.append(node_ip)
 
         # Now I extend the existing volume
-        list_bricks = []
+
         print("I extend all volume without change replica")
 
 
         for volume in self.__list_volumes:
-                for node_ip in list_node:
-                    list_bricks.append(node_ip + ':' + self.__gluster_directory + '/' + volume)
+            list_bricks = []
+            for node_ip in list_node:
+                list_bricks.append(node_ip + ':' + self.__gluster_directory + '/' + volume)
 
-                volume_manager.extend(volume, list_bricks, self.__replica)
-                print("Volume '" + volume + "' has been extented")
+            volume_manager.extend(volume, list_bricks, self.__replica)
+            print("Volume '" + volume + "' has been extented")
 
         return True
 
