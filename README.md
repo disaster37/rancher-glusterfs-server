@@ -56,5 +56,28 @@ If you find this image useful here's how you can help:
 - Send me a tip via [Bitcoin](https://www.coinbase.com/disaster37) or using [Gratipay](https://gratipay.com/disaster37/)
 
 
+# Quick Start
+Like I have say at the beginning, this container work only on Rancher plateform. On your stack (applications), create new service (Add Service).
+1. Main section
+- NAME : Put 'gluster' as a name of your service. If you change this name, you must add environment variable name SERVICE_NAME with the name of your current service.
+- SCALE:  Run 2 or more container. I think you can start with 2 and upgrade later with 4 if needed
+- SELECT IMAGE : put 'webcenter/rancher-glusterfs-server:latest'
+2. ADVANCED OPTIONS - Command
+- ENVIRONMENT VARS : put the environment variable that you need to custom Glusterfs
+  - SERVICE_NAME : it' the name of you service. By default it's 'gluster'
+  - GLUSTER_DATA : It's path to store glusterfs data. By default it's '/data'
+  - GLUSTER_VOLUMES : It's the list of volume you need to host on the glusterfs (for exemple : 'dbvol,appvol'). By default it's 'ranchervol'.
+  - GLUSTER_TRANSPORT : It's the transport on glusterfs. By default it's 'tcp'.
+  - GLUSTER_REPLICA : It's the number of replica for your data hosted on gluster. By default it's '2'.
+  - GLUSTER_STRIPE : It's the stripe of your volume . By default it's disable.
+  - GLUSTER_QUOTA : It's the quota size for your each volume (for exemple '10GB'): By default it's disable.
+3. ADVANCED OPTIONS - Volumes
+  - VOLUMES : Put '/data' on your host. For exemple : '/data/MY_STACK:/data'
+4. ADVANCED OPTIONS - Security/Host
+  - CAPABILITIES : Add 'SYS_ADMIN'. It's needed lauchn glusterfs
+  - DEVICE BINDING : Put '/dev/fuse'. It's needed by glusterfs (for exemple if you use quota)
+5. ADVANCED OPTIONS - Scheduling
+  - Add scheduling with the following rules : 'The host must not have a service with the name 'MY_STACK/gluster'. This rules permit to lauchn a unique container gluster of this stack on each host (it's better to avoid SPOF).
+3. 
 
 
