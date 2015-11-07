@@ -7,20 +7,7 @@
     - [Memory](#memory)
     - [Storage](#storage)
 - [Contributing](#contributing)
-- [Issues](#issues)
-- [Installation](#installation)
 - [Quick Start](#quick-start)
-- [Configuration](#configuration)
-  - [ACCESS](#access)
-  - [QUEUE](#queue)
-  - [TOPIC](#topic)
-  - [Data Store](#data-store)
-  - [BROKER](#broker)
-  - [Disk usage](#disk-usage)
-  - [JMX](#JMX)
-  - [Avaible Configuration Parameters](#avaible-configuration-parameters)
-  - [Advance configuration](#advance-configuration)
-- [References](#references)
 
 # Introduction
 

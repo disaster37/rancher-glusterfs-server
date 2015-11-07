@@ -1,16 +1,14 @@
 #!/usr/bin/python
 import os
-import subprocess
-from threading import Thread
-import urllib2
 from gluster.Gluster import Gluster
 import sys
 import time
+from rancher_metadata import MetadataAPI
 
 __author__ = 'Sebastien LANGOUREAUX'
 
 
-class ThreadGluster(Thread):
+class ServiceRun():
 
   def __init__(self, service_name, gluster_directory, list_volumes, transport, stripe = None, replica = None, quota = None):
     """ Init gluster
@@ -24,7 +22,6 @@ class ThreadGluster(Thread):
     if transport is None or transport == "":
       raise Exception("You must set the transport")
 
-    Thread.__init__(self)
     self.__service_name = service_name
     self.__gluster_directory = gluster_directory
     self.__list_volumes = list_volumes
@@ -36,8 +33,8 @@ class ThreadGluster(Thread):
 
   def run(self):
 
-    print("Wait 60s that glusterfs start and another node also start \n")
-    time.sleep(60)
+    print("Wait 120s that glusterfs start and another node also start \n")
+    time.sleep(120)
 
     while True:
         try:
@@ -54,122 +51,125 @@ class ThreadGluster(Thread):
     gluster = Gluster()
     peer_manager = gluster.get_peer_manager()
     volume_manager = gluster.get_volume_manager()
+    metadata_manager = MetadataAPI()
 
-    # First, check if I am the master. The master is the smallest IP that returned by 'dig SERVICE_NAME'
-    program = ["/usr/bin/dig",
-        self.__service_name,
-        '+short'
-        ]
-    try:
-        response = subprocess.check_output(program).split("\n")
-        response.pop()
-        if len(response) == 0:
-            print("No dns answer for service name '" + self.__service_name + "'. Are you sure is the name of your service ? Else set the '-e SERVICE_NAME' with the good value")
-            sys.exit(1)
-        elif len(response) == 1:
-            print("I am alone. So I can't create the glusterfs cluster")
-            sys.exit(1)
-        else:
-            print("There are " + str(len(response)) + " servers.")
-    except subprocess.CalledProcessError,e:
-        print("Some errors appear when I dig the service name : " + e.output)
-        sys.exit(1)
+    # I check there are more than 1 container
+    number_node = metadata_manager.get_service_scale_size()
+    if number_node < 2 :
+        print("You must scale this service (2 or more containers)")
+        return False
 
-    # Now I get my IP to look if I am the master
-    my_ip = urllib2.urlopen('http://rancher-metadata/latest/self/container/primary_ip').read()
-    if my_ip is None:
-        print("I can't found my IP")
-        sys.exit(1)
-    print("My IP is " + my_ip + ".")
+        
+    # I get my container info
+    my_name = metadata_manager.get_container_name()
+    my_ip = metadata_manager.get_container_ip()
+    my_id = metadata_manager.get_container_id()
+
+
+    # I get the other container info
+    list_containers = {}
+    list_containers_name = metadata_manager.get_service_containers()
+    is_scale_complet = True
+    for container_name in list_containers_name:
+        if container_name != my_name:
+            list_containers[container_name] = {}
+            list_containers[container_name]['id'] = metadata_manager.get_container_id(container_name)
+            list_containers[container_name]['name'] = container_name
+            list_containers[container_name]['ip'] = metadata_manager.get_container_ip(container_name)
+            if list_containers[container_name]['ip'] is None or list_containers[container_name]['ip'] == '':
+                is_scale_complet = False
+                print("The container " + container_name + " have not yet the IP")
+
+
 
     # Then I look if I am already on cluster
     peer_status = peer_manager.status()
     if peer_status["peers"] == 0:
+        print("I am " + my_name + " and my IP is " + my_ip)
+        print("There are " + str(number_node) + " container is this service")
         print("I am not yet on cluster")
 
         # Now I look if there are already cluster
         is_cluster_found = False
-        for node_ip in response:
-            if node_ip != my_ip:
-                gluster_temp = Gluster(node_ip)
+        for container in list_containers.itervalues():
+            if container['ip'] is not None and container['ip'] != '':
+                gluster_temp = Gluster(container['ip'])
                 peer_status = gluster_temp.get_peer_manager().status()
                 if peer_status["peers"] > 0:
                     is_cluster_found = True
                     break
 
         if is_cluster_found is True:
-            print("There are  already cluster. I will wait that member meet him")
+            print("There are  already cluster. I will wait that member guest him")
             return True
 
         # No yet cluster
         else:
-            print("There are no cluster. I will get if I am the master")
+            if is_scale_complet == False:
+                print("There are no cluster. I wait some time that the service start all container before create it.")
+                return False
 
-            my_score = int(my_ip.replace('.',''))
-            print("My score is " + str(my_score))
+            print("There are no cluster. I will get if I am the master")
             isMaster = True
 
             # Now I loop on all node to compar my score
-            for node_ip in response:
-                if node_ip != my_ip:
-                    node_score = int(node_ip.replace('.',''))
-                    print("Node score is " + str(node_score))
-                    if node_score < my_score:
-                        isMaster = False
-                        break
+            for container in list_containers.itervalues():
+                if container['id'] < my_id:
+                    isMaster = False
+                    break
+
             # I am slave
             if isMaster == False:
-                print("I am a slave and I am not yet on cluster. I sleep and I wait the master meet him on cluster")
+                print("I am a slave and I am not yet on cluster. I sleep and I wait the master guest me on cluster")
                 return True
 
             # I am the master
-            print("I am the master")
-            if (len(response) % int(self.__replica)) != 0 :
+            print("I will create the new cluster")
+            if (number_node % int(self.__replica)) != 0 :
                 print("The number of node is not compatible with your replica number. It must be a multiple of " + str(self.__replica) + ". We do nothink while the number is not compatible.")
                 return False
 
-            list_node = []
-            list_node.append(my_ip)
-            print("I create the new cluster")
-            for node_ip in response:
-                if my_ip != node_ip:
-                    peer_manager.probe(node_ip)
-                    print(node_ip + " added on cluster")
-                    list_node.append(node_ip)
+
+            for container in list_containers.itervalues():
+                peer_manager.probe(container['ip'])
+                print(container['name'] +  " ( " + container['ip'] + " ) " + " added on cluster")
+
 
             # Now I create the volume
+            time.sleep(5)
+            print("I will create all volumes")
 
-            print("I create all volume")
+
             for volume in self.__list_volumes:
                 list_bricks = []
-                for node_ip in list_node:
-                    list_bricks.append(node_ip + ':' + self.__gluster_directory + '/' + volume)
+                for container in list_containers.itervalues():
+                    list_bricks.append(container['ip'] + ':' + self.__gluster_directory + '/' + volume)
+
+                list_bricks.append( my_ip + ':' + self.__gluster_directory + '/' + volume)
 
                 volume_manager.create(volume, list_bricks, self.__transport, self.__stripe, self.__replica, self.__quota)
                 print("Volume '" + volume + "' has been created")
 
             return True
 
-    # New node
-    elif peer_status["peers"] < len(response):
+    # Look if I must guest ne node
+    elif peer_status["peers"] < number_node:
         print("New container detected")
         # Check if number is compatible with replica
-        if (len(response) % int(self.__replica)) != 0:
+        if (number_node % int(self.__replica)) != 0:
             print("The number of node is not compatible with your replica number. It must be a multiple of " + str(self.__replica) + ". I do nothink while the number is not compatible")
             return False
 
         list_node = []
-        for node_ip in response:
-            if node_ip not in peer_status["host"]:
-                peer_manager.probe(node_ip)
-                print(node_ip + " added on cluster")
-                list_node.append(node_ip)
+        for container in list_containers.itervalues():
+            if container['ip'] not in peer_status["host"]:
+                peer_manager.probe(container['ip'])
+                print(container['name'] +  " ( " + container['ip'] + " ) " + " added on cluster")
+                list_node.append(container['ip'])
 
         # Now I extend the existing volume
-
-        print("I extend all volume without change replica")
-
-
+        time.sleep(5)
+        print("I will extend all volume without change replica")
         for volume in self.__list_volumes:
             list_bricks = []
             for node_ip in list_node:
@@ -180,8 +180,6 @@ class ThreadGluster(Thread):
 
         return True
 
-
-    print("do nothink")
     return True
 
 
@@ -190,12 +188,7 @@ if __name__ == '__main__':
     # Start
     if(len(sys.argv) > 1 and sys.argv[1] == "start"):
 
-        thread_gluster = ThreadGluster(os.getenv('SERVICE_NAME'), os.getenv('GLUSTER_DATA'), os.getenv('GLUSTER_VOLUMES').split(','), os.getenv('GLUSTER_TRANSPORT'), os.getenv('GLUSTER_STRIPE'), os.getenv('GLUSTER_REPLICA'), os.getenv('GLUSTER_QUOTA'))
-        thread_gluster.start()
-
-        # Start services
-        os.system("/usr/sbin/glusterd -p /var/run/glusterd.pid")
-        os.system("/usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf")
-
+        service = ServiceRun(os.getenv('SERVICE_NAME'), os.getenv('GLUSTER_DATA'), os.getenv('GLUSTER_VOLUMES').split(','), os.getenv('GLUSTER_TRANSPORT'), os.getenv('GLUSTER_STRIPE'), os.getenv('GLUSTER_REPLICA'), os.getenv('GLUSTER_QUOTA'))
+        service.run()
 
 

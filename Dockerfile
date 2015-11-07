@@ -24,10 +24,13 @@ WORKDIR /usr/src
 RUN git clone https://github.com/disaster37/python-gluster.git
 WORKDIR /usr/src/python-gluster
 RUN python setup.py install
+RUN pip install rancher_metadata
 
 # Add some script to init the glusterfs cluster
 ADD assets/init.py /app/
 RUN chmod +x /app/init.py
+ADD assets/run /app/
+RUN chmod +x /app/run
 
 
 WORKDIR /app
@@ -37,4 +40,4 @@ VOLUME ["${GLUSTER_DATA}", "/var/lib/glusterd" ]
 # CLEAN APT
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-CMD [ "/app/init.py", "start" ] 
+CMD [ "/app/run" ] 
