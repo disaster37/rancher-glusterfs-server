@@ -167,8 +167,12 @@ class ServiceRun():
                 print(container['name'] +  " ( " + container['ip'] + " ) " + " added on cluster")
                 list_node.append(container['ip'])
 
+        # Stay all node that join the cluster before create all volumes
+        print("Wait all node join the cluster .")
+        while number_node != metadata_manager.get_service_scale_size():
+            print(".")
+            time.sleep(5)
         # Now I extend the existing volume
-        time.sleep(5)
         print("I will extend all volume without change replica")
         for volume in self.__list_volumes:
             list_bricks = []
