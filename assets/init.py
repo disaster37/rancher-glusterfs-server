@@ -135,8 +135,12 @@ class ServiceRun():
                 print(container['name'] +  " ( " + container['ip'] + " ) " + " added on cluster")
 
 
+             # Stay all node that join the cluster before create all volumes
+            print("Wait all node join the cluster .")
+            while number_node != metadata_manager.get_service_scale_size():
+                print(".")
+                time.sleep(5)
             # Now I create the volume
-            time.sleep(5)
             print("I will create all volumes")
 
 
