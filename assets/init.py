@@ -41,8 +41,9 @@ class ServiceRun():
             self.manage_cluster()
         except Exception,e:
             print("Some error appear : " + e.message)
+            print("I will try again in 120s")
 
-        time.sleep(300)
+        time.sleep(120)
 
 
 
@@ -68,17 +69,13 @@ class ServiceRun():
 
     # I get the other container info
     list_containers = {}
-    list_containers_name = metadata_manager.get_service_containers()
-    is_scale_complet = True
+    list_containers_name = metadata_manager.wait_service_containers()
     for container_name in list_containers_name:
         if container_name != my_name:
             list_containers[container_name] = {}
             list_containers[container_name]['id'] = metadata_manager.get_container_id(container_name)
             list_containers[container_name]['name'] = container_name
             list_containers[container_name]['ip'] = metadata_manager.get_container_ip(container_name)
-            if list_containers[container_name]['ip'] is None or list_containers[container_name]['ip'] == '':
-                is_scale_complet = False
-                print("The container " + container_name + " have not yet the IP")
 
 
 
@@ -91,23 +88,28 @@ class ServiceRun():
 
         # Now I look if there are already cluster
         is_cluster_found = False
+        is_node_offline = False
         for container in list_containers.itervalues():
             if container['ip'] is not None and container['ip'] != '':
-                gluster_temp = Gluster(container['ip'])
-                peer_status = gluster_temp.get_peer_manager().status()
-                if peer_status["peers"] > 0:
-                    is_cluster_found = True
-                    break
+                try:
+                    gluster_temp = Gluster(container['ip'])
+                    peer_status = gluster_temp.get_peer_manager().status()
+                    if peer_status["peers"] > 0:
+                        is_cluster_found = True
+                        break
+                except Exception,e:
+                    print(container['name'] + " seems offline or glusterfs is not yet started")
+                    is_node_offline = True
 
         if is_cluster_found is True:
             print("There are  already cluster. I will wait that member guest him")
             return True
+        elif is_node_offline is True:
+            print("I am not found existing cluster and another node is offline. We try again in next 120s")
+            return False
 
         # No yet cluster
         else:
-            if is_scale_complet == False:
-                print("There are no cluster. I wait some time that the service start all container before create it.")
-                return False
 
             print("There are no cluster. I will get if I am the master")
             isMaster = True
@@ -136,10 +138,13 @@ class ServiceRun():
 
 
              # Stay all node that join the cluster before create all volumes
-            print("Wait all node join the cluster .")
-            while number_node != metadata_manager.get_service_scale_size():
+            print("Wait all node join the glusterfs cluster .")
+            peer_status = peer_manager.status()
+            while number_node != peer_status["peers"]:
                 print(".")
                 time.sleep(5)
+                peer_status = peer_manager.status()
+
             # Now I create the volume
             print("I will create all volumes")
 
@@ -173,9 +178,11 @@ class ServiceRun():
 
         # Stay all node that join the cluster before create all volumes
         print("Wait all node join the cluster .")
-        while number_node != metadata_manager.get_service_scale_size():
+        peer_status = peer_manager.status()
+        while number_node != peer_status["peers"]:
             print(".")
             time.sleep(5)
+            peer_status = peer_manager.status()
         # Now I extend the existing volume
         print("I will extend all volume without change replica")
         for volume in self.__list_volumes:
