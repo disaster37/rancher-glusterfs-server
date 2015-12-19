@@ -77,7 +77,7 @@ class ServiceRun():
             print("Volume '" + volume + "' has been created")
 
 
-  def __create_cluster(self, list_nodes):
+  def __create_cluster(self, list_nodes, numbers_nodes):
     gluster = Gluster()
     peer_manager = gluster.get_peer_manager()
     for node in list_nodes.itervalues():
@@ -85,7 +85,7 @@ class ServiceRun():
         print(node['name'] +  " ( " + node['ip'] + " ) " + " added on cluster")
 
     # I wait all node join the glusterfs before continue
-    while(self.__get_numbers_peer() != number_node):
+    while(self.__get_numbers_peer() != numbers_nodes):
         time.sleep(1)
 
   def __get_numbers_peer(self):
@@ -177,7 +177,7 @@ class ServiceRun():
 
     # If I am not on cluster and there are no cluster and I am the master, so I create the gluster
     if (self.__is_already_on_glusterfs() is False) and (self._is_master(current_container, list_containers) is True) and (self.__is_cluster_already_exist(list_containers) is False):
-        self.__create_cluster(list_containers)
+        self.__create_cluster(list_containers, number_node)
 
 
 
