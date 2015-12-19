@@ -196,7 +196,7 @@ class ServiceRun():
 
     # I create all volumes
     list_nodes = list_containers.copy()
-    list_nodes.append(current_container)
+    list_nodes[current_container["name"]] = current_container
     self.__create_all_volumes(self.__list_volumes, self.__transport, self.__stripe, self.__replica, self.__quota,self.__gluster_directory,list_containers)
 
 
