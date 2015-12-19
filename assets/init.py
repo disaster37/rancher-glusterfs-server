@@ -176,7 +176,7 @@ class ServiceRun():
     list_containers = self.__get_other_container_in_service(current_container["name"])
 
     # If I am not on cluster and there are no cluster and I am the master, so I create the gluster
-    if (self.__is_already_on_glusterfs() is False) and (self._is_master(current_container, list_containers) is True) and (self.__is_cluster_already_exist(list_containers)):
+    if (self.__is_already_on_glusterfs() is False) and (self._is_master(current_container, list_containers) is True) and (self.__is_cluster_already_exist(list_containers) is False):
         self.__create_cluster(list_containers)
 
 
