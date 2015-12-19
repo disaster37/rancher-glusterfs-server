@@ -10,19 +10,16 @@ __author__ = 'Sebastien LANGOUREAUX'
 
 class ServiceRun():
 
-  def __init__(self, service_name, gluster_directory, list_volumes, transport, stripe = None, replica = None, quota = None):
+  def __init__(self, gluster_directory, list_volumes, transport, stripe = None, replica = None, quota = None):
     """ Init gluster
     """
 
 
-    if service_name is None or service_name == "":
-      raise Exception("You must set the service name")
     if gluster_directory is None or gluster_directory == "":
       raise Exception("You must set te directory to store gluster folume")
     if transport is None or transport == "":
       raise Exception("You must set the transport")
 
-    self.__service_name = service_name
     self.__gluster_directory = gluster_directory
     self.__list_volumes = list_volumes
     self.__transport = transport
@@ -31,19 +28,134 @@ class ServiceRun():
     self.__quota = quota
     self.__is_on_cluster = False
 
+
+
+  def __is_already_on_glusterfs(self):
+    gluster = Gluster()
+    peer_manager = gluster.get_peer_manager()
+    peer_status = peer_manager.status()
+    if peer_status["peers"] == 0:
+        return False
+    else:
+        return True
+
+  def __is_cluster_already_exist(self, list_nodes):
+    for node in list_nodes.itervalues():
+        gluster = Gluster(node['ip'])
+        peer_status = gluster.get_peer_manager().status()
+        if peer_status["peers"] > 0:
+            return True
+
+    return False
+
+  def __wait_all_glusterfs_start(self, list_nodes):
+
+      loop = True
+      while loop:
+        time.sleep(1)
+        try:
+            for node in list_nodes.itervalues():
+                gluster = Gluster(node['ip'])
+                peer_status = gluster.get_peer_manager().status()
+
+            loop = False
+        except Exception,e:
+            loop = True
+
+
+
+  def __create_all_volumes(self, list_volumes, transport, stripe, replica, quota, directory, list_nodes):
+    gluster = Gluster()
+    volume_manager = gluster.get_volume_manager()
+
+    for volume in list_volumes:
+        if len(volume_manager.info(volume)) == 0:
+            list_bricks = []
+            for node in list_nodes.itervalues():
+                list_bricks.append(node['ip'] + ':' + directory + '/' + volume)
+            volume_manager.create(volume, list_bricks, transport, stripe, replica, quota)
+            print("Volume '" + volume + "' has been created")
+
+
+  def __create_cluster(self, list_nodes):
+    gluster = Gluster()
+    peer_manager = gluster.get_peer_manager()
+    for node in list_nodes.itervalues():
+        peer_manager.probe(node['ip'])
+        print(node['name'] +  " ( " + node['ip'] + " ) " + " added on cluster")
+
+    # I wait all node join the glusterfs before continue
+    while(self.__get_numbers_peer() != number_node):
+        time.sleep(1)
+
+  def __get_numbers_peer(self):
+    gluster = Gluster()
+    peer_manager = gluster.get_peer_manager()
+    peer_status = peer_manager.status()
+
+    return peer_status["peers"]
+
+
+  def __get_peers(self):
+    gluster = Gluster()
+    return gluster.get_peer_manager()
+
+  def __get_my_container_info(self):
+    metadata_manager = MetadataAPI()
+    current_container = {}
+    current_container["name"] = metadata_manager.get_container_name()
+    current_container["ip"] = metadata_manager.get_container_ip()
+    current_container["id"] = metadata_manager.get_container_id()
+
+    return current_container
+
+
+  def __get_other_container_in_service(self, my_name):
+    metadata_manager = MetadataAPI()
+    list_containers = {}
+    list_containers_name = metadata_manager.wait_service_containers()
+    for container_name in list_containers_name:
+        if container_name != my_name:
+            list_containers[container_name] = {}
+            list_containers[container_name]['id'] = metadata_manager.get_container_id(container_name)
+            list_containers[container_name]['name'] = container_name
+            list_containers[container_name]['ip'] = metadata_manager.get_container_ip(container_name)
+
+
+    return list_containers
+
+
+  def __get_numbers_of_node_in_service(self):
+      metadata_manager = MetadataAPI()
+      return metadata_manager.get_service_scale_size()
+
+
+  def _is_master(self, current_container, list_containers):
+
+    for container in list_containers.itervalues():
+        if container['id'] < current_container["id"]:
+            return False
+
+    return True
+
+
+
   def run(self):
 
-    print("Wait 120s that glusterfs start and another node also start \n")
-    time.sleep(120)
+    current_container = self.__get_my_container_info()
+    list_containers = self.__get_other_container_in_service(current_container)
+
+    print("Wait all glusterfs start on all node \n")
+    self.__wait_all_glusterfs_start(list_containers)
 
     while True:
         try:
             self.manage_cluster()
         except Exception,e:
             print("Some error appear : " + e.message)
-            print("I will try again in 120s")
+            print("I will try again in 60s")
 
-        time.sleep(120)
+        time.sleep(60)
 
 
 
@@ -55,147 +167,38 @@ class ServiceRun():
     metadata_manager = MetadataAPI()
 
     # I check there are more than 1 container
-    number_node = metadata_manager.get_service_scale_size()
-    if number_node < 2 :
-        print("You must scale this service (2 or more containers)")
-        return False
+    number_node = self.__get_numbers_of_node_in_service()
 
-        
     # I get my container info
-    my_name = metadata_manager.get_container_name()
-    my_ip = metadata_manager.get_container_ip()
-    my_id = metadata_manager.get_container_id()
+    current_container = self.__get_my_container_info()
 
+    # I get all other containers
+    list_containers = self.__get_other_container_in_service(current_container["name"])
 
-    # I get the other container info
-    list_containers = {}
-    list_containers_name = metadata_manager.wait_service_containers()
-    for container_name in list_containers_name:
-        if container_name != my_name:
-            list_containers[container_name] = {}
-            list_containers[container_name]['id'] = metadata_manager.get_container_id(container_name)
-            list_containers[container_name]['name'] = container_name
-            list_containers[container_name]['ip'] = metadata_manager.get_container_ip(container_name)
+    # If I am not on cluster and there are no cluster and I am the master, so I create the gluster
+    if (self.__is_already_on_glusterfs() is False) and (self._is_master(current_container, list_containers) is True) and (self.__is_cluster_already_exist(list_containers)):
+        self.__create_cluster(list_containers)
 
 
 
-    # Then I look if I am already on cluster
-    peer_status = peer_manager.status()
-    if peer_status["peers"] == 0:
-        print("I am " + my_name + " and my IP is " + my_ip)
-        print("There are " + str(number_node) + " container is this service")
-        print("I am not yet on cluster")
+    # If I am already on cluster and there are new peer, I guest them.
+    if (self.__is_already_on_glusterfs() is True) and (number_node > self.__get_numbers_peer()):
 
-        # Now I look if there are already cluster
-        is_cluster_found = False
-        is_node_offline = False
-        for container in list_containers.itervalues():
-            if container['ip'] is not None and container['ip'] != '':
-                try:
-                    gluster_temp = Gluster(container['ip'])
-                    peer_status = gluster_temp.get_peer_manager().status()
-                    if peer_status["peers"] > 0:
-                        is_cluster_found = True
-                        break
-                except Exception,e:
-                    print(container['name'] + " seems offline or glusterfs is not yet started")
-                    is_node_offline = True
-
-        if is_cluster_found is True:
-            print("There are  already cluster. I will wait that member guest him")
-            return True
-        elif is_node_offline is True:
-            print("I am not found existing cluster and another node is offline. We try again in next 120s")
-            return False
-
-        # No yet cluster
-        else:
-
-            print("There are no cluster. I will get if I am the master")
-            isMaster = True
-
-            # Now I loop on all node to compar my score
-            for container in list_containers.itervalues():
-                if container['id'] < my_id:
-                    isMaster = False
-                    break
-
-            # I am slave
-            if isMaster == False:
-                print("I am a slave and I am not yet on cluster. I sleep and I wait the master guest me on cluster")
-                return True
-
-            # I am the master
-            print("I will create the new cluster")
-            if (number_node % int(self.__replica)) != 0 :
-                print("The number of node is not compatible with your replica number. It must be a multiple of " + str(self.__replica) + ". We do nothink while the number is not compatible.")
-                return False
-
-
-            for container in list_containers.itervalues():
-                peer_manager.probe(container['ip'])
-                print(container['name'] +  " ( " + container['ip'] + " ) " + " added on cluster")
-
-
-             # Stay all node that join the cluster before create all volumes
-            print("Wait all node join the glusterfs cluster .")
-            peer_status = peer_manager.status()
-            while number_node != peer_status["peers"]:
-                print(".")
-                time.sleep(5)
-                peer_status = peer_manager.status()
-
-            # Now I create the volume
-            print("I will create all volumes")
-
-
-            for volume in self.__list_volumes:
-                list_bricks = []
-                for container in list_containers.itervalues():
-                    list_bricks.append(container['ip'] + ':' + self.__gluster_directory + '/' + volume)
-
-                list_bricks.append( my_ip + ':' + self.__gluster_directory + '/' + volume)
-
-                volume_manager.create(volume, list_bricks, self.__transport, self.__stripe, self.__replica, self.__quota)
-                print("Volume '" + volume + "' has been created")
-
-            return True
-
-    # Look if I must guest ne node
-    elif peer_status["peers"] < number_node:
-        print("New container detected")
-        # Check if number is compatible with replica
-        if (number_node % int(self.__replica)) != 0:
-            print("The number of node is not compatible with your replica number. It must be a multiple of " + str(self.__replica) + ". I do nothink while the number is not compatible")
-            return False
-
-        list_node = []
+        list_nodes = []
+        peer_status = self.__get_peers()
         for container in list_containers.itervalues():
             if container['ip'] not in peer_status["host"]:
-                peer_manager.probe(container['ip'])
-                print(container['name'] +  " ( " + container['ip'] + " ) " + " added on cluster")
-                list_node.append(container['ip'])
+                list_nodes.append(container)
 
-        # Stay all node that join the cluster before create all volumes
-        print("Wait all node join the cluster .")
-        peer_status = peer_manager.status()
-        while number_node != peer_status["peers"]:
-            print(".")
-            time.sleep(5)
-            peer_status = peer_manager.status()
-        # Now I extend the existing volume
-        print("I will extend all volume without change replica")
-        for volume in self.__list_volumes:
-            list_bricks = []
-            for node_ip in list_node:
-                list_bricks.append(node_ip + ':' + self.__gluster_directory + '/' + volume)
 
-            volume_manager.extend(volume, list_bricks, self.__replica)
-            print("Volume '" + volume + "' has been extented")
+        self.__create_cluster(list_nodes)
 
-        return True
 
-    return True
+    # I create all volumes
+    list_nodes = list_containers.copy()
+    list_nodes.append(current_container)
+    self.__create_all_volumes(self.__list_volumes, self.__transport, self.__stripe, self.__replica, self.__quota,self.__gluster_directory,list_containers)
+
 
 
 
@@ -203,7 +206,5 @@ if __name__ == '__main__':
     # Start
     if(len(sys.argv) > 1 and sys.argv[1] == "start"):
 
-        service = ServiceRun(os.getenv('SERVICE_NAME'), os.getenv('GLUSTER_DATA'), os.getenv('GLUSTER_VOLUMES').split(','), os.getenv('GLUSTER_TRANSPORT'), os.getenv('GLUSTER_STRIPE'), os.getenv('GLUSTER_REPLICA'), os.getenv('GLUSTER_QUOTA'))
+        service = ServiceRun(os.getenv('GLUSTER_DATA'), os.getenv('GLUSTER_VOLUMES').split(','), os.getenv('GLUSTER_TRANSPORT'), os.getenv('GLUSTER_STRIPE'), os.getenv('GLUSTER_REPLICA'), os.getenv('GLUSTER_QUOTA'))
         service.run()
-
-
