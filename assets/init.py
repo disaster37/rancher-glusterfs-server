@@ -103,7 +103,8 @@ class ServiceRun():
 
   def __get_peers(self):
     gluster = Gluster()
-    return gluster.get_peer_manager()
+    peer_manager = gluster.get_peer_manager()
+    return peer_manager.status()
 
   def __get_my_container_info(self):
     metadata_manager = MetadataAPI()
@@ -194,6 +195,7 @@ class ServiceRun():
         for container in list_containers.itervalues():
             if container['ip'] not in peer_status["host"]:
                 list_nodes[container["name"]] = container
+                print("New host : " + container["name"])
 
 
         self.__create_cluster(list_nodes, number_node)
@@ -211,7 +213,7 @@ class ServiceRun():
 
 if __name__ == '__main__':
     # Start
-    if(len(sys.argv) > 1 and sys.argv[1] == "start"):
 
-        service = ServiceRun(os.getenv('GLUSTER_DATA'), os.getenv('GLUSTER_VOLUMES').split(','), os.getenv('GLUSTER_TRANSPORT'), os.getenv('GLUSTER_STRIPE'), os.getenv('GLUSTER_REPLICA'), os.getenv('GLUSTER_QUOTA'))
-        service.run()
+
+    service = ServiceRun(os.getenv('GLUSTER_DATA'), os.getenv('GLUSTER_VOLUMES').split(','), os.getenv('GLUSTER_TRANSPORT'), os.getenv('GLUSTER_STRIPE'), os.getenv('GLUSTER_REPLICA'), os.getenv('GLUSTER_QUOTA'))
+    service.run()
