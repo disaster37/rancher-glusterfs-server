@@ -34,10 +34,11 @@ RUN chmod +x /app/run
 
 
 WORKDIR /app
-VOLUME ["${GLUSTER_DATA}", "/var/lib/glusterd" ]
+VOLUME ["${GLUSTER_DATA}"]
+#VOLUME ["${GLUSTER_DATA}", "/var/lib/glusterd" ]
 
 
 # CLEAN APT
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-CMD [ "/app/run" ] 
+CMD [ "/app/run" ]
