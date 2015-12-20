@@ -189,20 +189,21 @@ class ServiceRun():
     # If I am already on cluster and there are new peer, I guest them.
     if (self.__is_already_on_glusterfs() is True) and (number_node > self.__get_numbers_peer()):
 
-        list_nodes = []
+        list_nodes = {}
         peer_status = self.__get_peers()
         for container in list_containers.itervalues():
             if container['ip'] not in peer_status["host"]:
-                list_nodes.append(container)
+                list_nodes[container["name"]] = container
 
 
         self.__create_cluster(list_nodes)
+        list_containers = list_nodes
 
 
     # I create all volumes
     list_nodes = list_containers.copy()
     list_nodes[current_container["name"]] = current_container
-    self.__create_all_volumes(self.__list_volumes, self.__transport, self.__stripe, self.__replica, self.__quota,self.__gluster_directory,list_containers)
+    self.__create_all_volumes(self.__list_volumes, self.__transport, self.__stripe, self.__replica, self.__quota,self.__gluster_directory,list_nodes)
 
 
 
