@@ -201,9 +201,10 @@ class ServiceRun():
 
 
     # I create all volumes
-    list_nodes = list_containers.copy()
-    list_nodes[current_container["name"]] = current_container
-    self.__create_all_volumes(self.__list_volumes, self.__transport, self.__stripe, self.__replica, self.__quota,self.__gluster_directory,list_nodes)
+    if self.__is_already_on_glusterfs() is True:
+        list_nodes = list_containers.copy()
+        list_nodes[current_container["name"]] = current_container
+        self.__create_all_volumes(self.__list_volumes, self.__transport, self.__stripe, self.__replica, self.__quota,self.__gluster_directory,list_nodes)
 
 
 
