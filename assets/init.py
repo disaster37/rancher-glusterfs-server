@@ -151,8 +151,9 @@ class ServiceRun():
     current_container = self.__get_my_container_info()
     list_containers = self.__get_other_container_in_service(current_container)
 
-    print("Wait all glusterfs start on all node \n")
+    print("Wait all glusterfs start on all node : ")
     self.__wait_all_glusterfs_start(list_containers)
+    print("Ok \n")
 
     while True:
         try:
