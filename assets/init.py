@@ -69,12 +69,17 @@ class ServiceRun():
     volume_manager = gluster.get_volume_manager()
 
     for volume in list_volumes:
-        if len(volume_manager.info(volume)) == 0:
-            list_bricks = []
-            for node in list_nodes.itervalues():
-                list_bricks.append(node['ip'] + ':' + directory + '/' + volume)
-            volume_manager.create(volume, list_bricks, transport, stripe, replica, quota)
-            print("Volume '" + volume + "' has been created")
+        try:
+            volume_manager.info(volume)
+        except Exception,e:
+            if e.message == "Volume " + volume +" does not exist":
+                list_bricks = []
+                for node in list_nodes.itervalues():
+                    list_bricks.append(node['ip'] + ':' + directory + '/' + volume)
+                volume_manager.create(volume, list_bricks, transport, stripe, replica, quota)
+                print("Volume '" + volume + "' has been created")
+            else:
+                raise e
 
 
   def __create_cluster(self, list_nodes, numbers_nodes):
