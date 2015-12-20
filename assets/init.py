@@ -196,7 +196,7 @@ class ServiceRun():
                 list_nodes[container["name"]] = container
 
 
-        self.__create_cluster(list_nodes)
+        self.__create_cluster(list_nodes, number_node)
         list_containers = list_nodes
 
 
