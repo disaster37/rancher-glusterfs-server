@@ -34,8 +34,7 @@ RUN chmod +x /app/run
 
 
 WORKDIR /app
-VOLUME ["${GLUSTER_DATA}"]
-#VOLUME ["${GLUSTER_DATA}", "/var/lib/glusterd" ]
+VOLUME ["${GLUSTER_DATA}", "/var/lib/glusterd" ]
 
 
 # CLEAN APT

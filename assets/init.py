@@ -111,7 +111,7 @@ class ServiceRun():
     current_container = {}
     current_container["name"] = metadata_manager.get_container_name()
     current_container["ip"] = metadata_manager.get_container_ip()
-    current_container["id"] = metadata_manager.get_container_id()
+    current_container["id"] = metadata_manager.get_container_create_index()
 
     return current_container
 
@@ -119,11 +119,12 @@ class ServiceRun():
   def __get_other_container_in_service(self, my_name):
     metadata_manager = MetadataAPI()
     list_containers = {}
-    list_containers_name = metadata_manager.wait_service_containers()
+    metadata_manager.wait_service_containers()
+    list_containers_name = metadata_manager.get_service_containers()
     for container_name in list_containers_name:
         if container_name != my_name:
             list_containers[container_name] = {}
-            list_containers[container_name]['id'] = metadata_manager.get_container_id(container_name)
+            list_containers[container_name]['id'] = metadata_manager.get_container_create_index(container_name)
             list_containers[container_name]['name'] = container_name
             list_containers[container_name]['ip'] = metadata_manager.get_container_ip(container_name)
 
@@ -143,6 +144,8 @@ class ServiceRun():
             return False
 
     return True
+
+  
 
 
 
