@@ -13,8 +13,9 @@ ENV GLUSTER_REPLICA 2
 #ENV GLUSTER_QUOTA "10GB"
 
 
-RUN apt-get update && \
-    apt-get install -y glusterfs-server
+RUN add-apt-repository -y ppa:gluster/glusterfs-3.7 && \
+    apt-get update && \
+    apt-get install -y glusterfs-server glusterfs-client
 
 
 RUN mkdir /data
